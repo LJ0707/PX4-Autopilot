@@ -100,7 +100,16 @@ void Tiltrotor::update_vtol_state()
 	 * forward completely. For the backtransition the motors simply rotate back.
 	*/
 
-	if (!_attc->is_fixed_wing_requested()) {
+	if (_vtol_vehicle_status->vtol_transition_failsafe) {
+		// Failsafe event, switch to MC mode immediately
+		_vtol_schedule.flight_mode = vtol_mode::MC_MODE;
+
+		//reset failsafe when FW is no longer requested
+		if (!_attc->is_fixed_wing_requested()) {
+			_vtol_vehicle_status->vtol_transition_failsafe = false;
+		}
+
+	} else 	if (!_attc->is_fixed_wing_requested()) {
 
 		// plane is in multicopter mode
 		switch (_vtol_schedule.flight_mode) {
@@ -322,6 +331,11 @@ void Tiltrotor::update_transition_state()
 
 		_thrust_transition = -_mc_virtual_att_sp->thrust_body[2];
 
+		// in stabilized, acro or manual mode, set the MC thrust to the throttle stick position (coming from the FW attitude setpoint)
+		if (!_v_control_mode->flag_control_climb_rate_enabled) {
+			_v_att_sp->thrust_body[2] = -_fw_virtual_att_sp->thrust_body[0];
+		}
+
 	} else if (_vtol_schedule.flight_mode == vtol_mode::TRANSITION_FRONT_P2) {
 		// the plane is ready to go into fixed wing mode, tilt the rotors forward completely
 		_tilt_control = _params_tiltrotor.tilt_transition +
@@ -340,6 +354,11 @@ void Tiltrotor::update_transition_state()
 
 
 		_thrust_transition = -_mc_virtual_att_sp->thrust_body[2];
+
+		// in stabilized, acro or manual mode, set the MC thrust to the throttle stick position (coming from the FW attitude setpoint)
+		if (!_v_control_mode->flag_control_climb_rate_enabled) {
+			_v_att_sp->thrust_body[2] = -_fw_virtual_att_sp->thrust_body[0];
+		}
 
 	} else if (_vtol_schedule.flight_mode == vtol_mode::TRANSITION_BACK) {
 		// turn on all MC motors
@@ -375,6 +394,11 @@ void Tiltrotor::update_transition_state()
 			_mc_pitch_weight = 1.0f;
 			// slowly ramp up throttle to avoid step inputs
 			_mc_throttle_weight = (time_since_trans_start - 1.0f) / 1.0f;
+		}
+
+		// in stabilized, acro or manual mode, set the MC thrust to the throttle stick position (coming from the FW attitude setpoint)
+		if (!_v_control_mode->flag_control_climb_rate_enabled) {
+			_v_att_sp->thrust_body[2] = -_fw_virtual_att_sp->thrust_body[0];
 		}
 	}
 
